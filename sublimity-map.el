@@ -138,6 +138,14 @@ selected."
       (set-window-parameter win 'sublimity-map-partner basewin)
       (setq sublimity-map--window win))))
 
+(defun sublimity-map--mouse-event (event)
+  (interactive "e")
+  (message "A mouse event %s" (posn-point (event-end event)))
+  (with-selected-window
+      (window-parameter
+       sublimity-map--window 'sublimity-map-partner)
+    (goto-char (posn-point (event-end event)))))
+
 (defun sublimity-map--generate-buffer (base)
   "Make minimap buffer for this buffer."
   (let ((ind (make-indirect-buffer
@@ -151,6 +159,11 @@ selected."
             sublimity-map--buffer           base
             sublimity-map--active-overlay   (make-overlay 0 0)
             sublimity-map--current-overlay  (make-overlay 0 0))
+      (advice-add)
+      (let ((keymap (make-sparse-keymap)))
+        (define-key keymap (kbd "<down-mouse-1>") 'ignore)
+        (define-key keymap (kbd "<mouse-1>") 'sublimity-map--mouse-event)
+        (use-local-map keymap))
       (set (make-local-variable 'auto-hscroll-mode) nil)
       (overlay-put sublimity-map--active-overlay
                    'face sublimity-map-active-region)
@@ -182,6 +195,13 @@ selected."
              (cl-every 'eval sublimity-map-criteria))
     (unless (and (window-live-p sublimity-map--window)
                  (eq (window-parent) (window-parent sublimity-map--window)))
+      ;; make sure there are no other minimap windows showing
+      (mapc
+       (lambda (win)
+         (with-selected-window win
+           (when sublimity-map--minimap-buffer-p
+             (delete-window win))))
+       (window-list))
       (sublimity-map--split-window))
     (unless (buffer-live-p sublimity-map--buffer)
       (sublimity-map--generate-buffer (current-buffer)))
@@ -213,7 +233,8 @@ selected."
 
 ;; + add hooks
 
-(add-hook 'sublimity--pre-command-functions 'sublimity-map--delete-window)
+;; why?
+'(add-hook 'sublimity--pre-command-functions 'sublimity-map--delete-window)
 
 ;; kill minimap buffer on "kill-all-local-variables"
 (add-hook 'change-major-mode-hook 'sublimity-map--kill-buffer-hook)
